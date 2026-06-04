@@ -1,0 +1,138 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Cloud Build config: builds and pushes Docker images for all MCP servers.
+#
+# Triggered automatically on push to main via GitHub Cloud Build trigger.
+# Can also be run manually:
+#   gcloud builds submit --config=deploy/cloudbuild.yaml .
+#
+# Substitution variables:
+#   _REGION:       GCP region (default: us-central1)
+#   _REPO_NAME:    Artifact Registry repo name (default: healthcare-mcp)
+#   _TFVARS_FILE:  Optional: Path to a custom .tfvars file to append to terraform.tfvars
+
+timeout: 1800s
+substitutions:
+  _REGION: us-central1
+  _REPO_NAME: healthcare-mcp
+  _DEVELOPER_EMAILS: '[]'
+  _AUTH_MODE: 'iam'
+  _TFVARS_FILE: ''
+
+steps:
+  # --- All Docker builds run in parallel (waitFor: ['-']) ---
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/rxnorm-mcp:latest', './rxnorm_mcp']
+    id: build-rxnorm
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/clinical-trials-mcp:latest', './clinical_trials_mcp']
+    id: build-clinical-trials
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/drug-data-mcp:latest', './drug_data_mcp']
+    id: build-drug-data
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/umls-mcp:latest', './umls_mcp']
+    id: build-umls
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/pubmed-mcp:latest', './pubmed_mcp']
+    id: build-pubmed
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/fda-safety-mcp:latest', './fda_safety_mcp']
+    id: build-fda-safety
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/icd10-mcp:latest', './icd10_mcp']
+    id: build-icd10
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/cms-coverage-mcp:latest', './cms_coverage_mcp']
+    id: build-cms-coverage
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/medlineplus-mcp:latest', './medlineplus_mcp']
+    id: build-medlineplus
+    waitFor: ['-']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/npi-mcp:latest', './npi_mcp']
+    id: build-npi
+    waitFor: ['-']
+
+  # Push all images after all builds complete
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        for img in rxnorm-mcp clinical-trials-mcp drug-data-mcp umls-mcp pubmed-mcp fda-safety-mcp icd10-mcp cms-coverage-mcp medlineplus-mcp npi-mcp; do
+          docker push "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/$img:latest"
+        done
+    id: push-images
+    waitFor:
+      - build-rxnorm
+      - build-clinical-trials
+      - build-drug-data
+      - build-umls
+      - build-pubmed
+      - build-fda-safety
+      - build-icd10
+      - build-cms-coverage
+      - build-medlineplus
+      - build-npi
+
+  # --- Terraform deploy ---
+  - name: hashicorp/terraform:1.9
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        cd deploy/terraform
+        cat > terraform.tfvars <<EOF
+        project_id = "$PROJECT_ID"
+        region     = "${_REGION}"
+        repo_name  = "${_REPO_NAME}"
+        image_tag  = "latest"
+        developer_emails = ${_DEVELOPER_EMAILS}
+        auth_mode = "${_AUTH_MODE}"
+        EOF
+        if [ -n "${_TFVARS_FILE}" ] && [ -f "../../${_TFVARS_FILE}" ]; then
+          cat "../../${_TFVARS_FILE}" >> terraform.tfvars
+        fi
+        cat terraform.tfvars
+        terraform init -backend-config="bucket=${PROJECT_ID}-tf-state"
+        # Import pre-existing Artifact Registry repo if not already in state
+        terraform import google_artifact_registry_repository.mcp_repo \
+          "projects/$PROJECT_ID/locations/${_REGION}/repositories/${_REPO_NAME}" 2>/dev/null || true
+        terraform apply -auto-approve
+    id: terraform-deploy
+    waitFor:
+      - push-images
+
+options:
+  logging: CLOUD_LOGGING_ONLY
