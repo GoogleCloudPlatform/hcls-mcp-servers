@@ -6,7 +6,7 @@
 
 Open-source [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers that provide AI agents with structured access to public U.S. healthcare data from the [NIH](https://www.nih.gov/), [FDA](https://www.fda.gov/), [CMS](https://www.cms.gov/), and [NLM](https://www.nlm.nih.gov/). 
 
-Deploy some or all of these 10 servers into your own Google Cloud project in minutes, then connect them to any MCP-compatible client (e.g., Gemini Enterprise, Antigravity Gemini CLI, Gemini Enterprise Agent Platform (GEAP, fomerly Vertex AI) , Claude Desktop). Each server runs as a stateless container on [Cloud Run](https://cloud.google.com/run) with built-in rate limiting, caching, and retry logic. 
+Deploy some or all of these 10 servers into your own Google Cloud project in minutes, then connect them to any MCP-compatible client (e.g., Gemini Enterprise, Antigravity CLI, and Gemini Enterprise Agent Platform (GEAP, fomerly Vertex AI). Each server runs as a stateless container on [Cloud Run](https://cloud.google.com/run) with built-in rate limiting, caching, and retry logic. 
 
 Your data and the execution environment never leave your tenant.
 
