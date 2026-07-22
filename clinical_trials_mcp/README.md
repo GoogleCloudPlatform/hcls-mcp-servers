@@ -94,4 +94,4 @@ This is the second server in a portfolio of 11 healthcare MCP servers wrapping p
 
 ## License
 
-MIT
+Apache 2.0
