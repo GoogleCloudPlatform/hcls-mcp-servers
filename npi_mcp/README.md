@@ -79,4 +79,4 @@ This server is part of a portfolio of healthcare MCP servers wrapping public U.S
 
 ## License
 
-MIT
+Apache 2.0

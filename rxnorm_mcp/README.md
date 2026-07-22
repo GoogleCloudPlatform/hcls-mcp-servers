@@ -83,4 +83,4 @@ This is the first server in a portfolio of 11 healthcare MCP servers wrapping pu
 
 ## License
 
-MIT
+Apache 2.0
