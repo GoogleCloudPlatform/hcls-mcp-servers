@@ -660,7 +660,7 @@ async def search_semantic(
 
 def _search_semantic_sync(query: str, max_results: int, include_full_text: bool) -> Dict[str, Any]:
     bq_client = _get_bq_client()
-    safe_query = query.replace("'", "''")
+    from google.cloud import bigquery
 
     if include_full_text:
         select_columns = "base.pmc_id, base.pmid, base.title, base.author, base.article_text, base.pmc_link, distance"
@@ -679,7 +679,7 @@ def _search_semantic_sync(query: str, max_results: int, include_full_text: bool)
       SELECT ml_generate_embedding_result AS embedding_col
       FROM ML.GENERATE_EMBEDDING(
         MODEL models.textembed,
-        (SELECT '{safe_query}' AS content),
+        (SELECT @query AS content),
         STRUCT(TRUE AS flatten_json_output)
       )
     )
@@ -693,9 +693,14 @@ def _search_semantic_sync(query: str, max_results: int, include_full_text: bool)
     )
     ORDER BY distance ASC;
     """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("query", "STRING", query),
+        ]
+    )
 
     try:
-        query_job = bq_client.query(sql)
+        query_job = bq_client.query(sql, job_config=job_config)
         results = query_job.result()
 
         articles = []
@@ -748,17 +753,22 @@ async def search_by_author_bq(
 
 def _search_by_author_bq_sync(author_name: str, max_results: int) -> Dict[str, Any]:
     bq_client = _get_bq_client()
-    safe_author = author_name.replace("'", "''")
+    from google.cloud import bigquery
 
     sql = f"""
     SELECT pmc_id, pmid, title, author, pmc_link
     FROM `{PUBMED_TABLE}`
-    WHERE SEARCH(author, '{safe_author}')
+    WHERE SEARCH(author, @author_name)
     LIMIT {max_results}
     """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("author_name", "STRING", author_name),
+        ]
+    )
 
     try:
-        query_job = bq_client.query(sql)
+        query_job = bq_client.query(sql, job_config=job_config)
         results = query_job.result()
 
         articles = []
@@ -809,17 +819,22 @@ async def search_fulltext(
 
 def _search_fulltext_sync(query: str, max_results: int) -> Dict[str, Any]:
     bq_client = _get_bq_client()
-    safe_query = query.replace("'", "''")
+    from google.cloud import bigquery
 
     sql = f"""
     SELECT pmc_id, pmid, title, author, article_text, pmc_link
     FROM `{PUBMED_TABLE}`
-    WHERE SEARCH(article_text, '{safe_query}')
+    WHERE SEARCH(article_text, @query)
     LIMIT {max_results}
     """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("query", "STRING", query),
+        ]
+    )
 
     try:
-        query_job = bq_client.query(sql)
+        query_job = bq_client.query(sql, job_config=job_config)
         results = query_job.result()
 
         articles = []
